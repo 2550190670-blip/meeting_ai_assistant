@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="hero compact-hero">
+  <div>
+    <p class="eyebrow">Meeting Copilot</p>
+    <h1>会议整理</h1>
+    <p class="hero-copy">录音、文本、纪要和待办都收在一处。</p>
+  </div>
+</header>
+
+<section class="library-toolbar">
+  <button id="filter-favorites" class="pill-link" type="button">收藏</button>
+  <button id="show-all" class="pill-link active" type="button">全部</button>
+  <button id="select-mode" class="pill-link" type="button">删除</button>
+  <button id="select-all" class="pill-link" type="button" hidden>全选</button>
+  <button id="bulk-delete" class="pill-link danger-link" type="button" hidden>批量删除</button>
+  <form action="/logout" method="post">
+    <button class="text-button" type="submit">退出</button>
+  </form>
+</section>
+
+<section class="stats-strip">
+  <div>
+    <strong id="meeting-count">{{ meetings | length }}</strong>
+    <span>会议记录</span>
+  </div>
+  <div>
+    <strong id="folder-count">{{ folders | length }}</strong>
+    <span>文件夹</span>
+  </div>
+</section>
+
+<section class="section-head">
+  <div class="section-title-actions">
+    <h2 id="list-title">全部会议</h2>
+    <button id="folder-menu-button" class="text-button compact-button" type="button">文件夹一览</button>
+  </div>
+</section>
+
+{% if meetings %}
+  <form id="bulk-delete-form" class="meeting-list" action="/meetings/bulk-delete" method="post">
+    {% for meeting in meetings %}
+      <article class="select-row" data-folder="{{ meeting.folder }}" data-favorite="{{ 'true' if meeting.favorite else 'false' }}" data-id="{{ meeting.id }}">
+        <label class="select-check">
+          <input name="meeting_ids" type="checkbox" value="{{ meeting.id }}">
+        </label>
+        <a class="meeting-card" href="/meetings/{{ meeting.id }}">
+          <span class="meeting-date">{{ meeting.created_at }} · {{ meeting.folder }}{% if meeting.favorite %} · ★{% endif %}</span>
+          <strong>{{ meeting.title }}</strong>
+          <small>{{ meeting.summary }}</small>
+        </a>
+      </article>
+    {% endfor %}
+  </form>
+{% else %}
+  <section id="empty-state" class="empty-state">
+    <strong>还没有会议记录</strong>
+    <p>创建第一条会议，粘贴文本或上传手机录音，就能生成结构化纪要。</p>
+  </section>
+{% endif %}
+{% if meetings %}
+  <section id="empty-state" class="empty-state" hidden>
+    <strong>这里还没有会议记录</strong>
+    <p>可以切换到全部会议，或新建一条会议记录。</p>
+  </section>
+{% endif %}
+
+<a class="floating-create" href="/meetings/new" title="新建会议" aria-label="新建会议">
+  <span></span>
+  <span></span>
+</a>
+
+<section id="folder-dropdown" class="folder-dropdown" hidden>
+  <div class="folder-dropdown-panel">
+    <div class="drawer-head">
+      <strong>文件夹</strong>
+      <button id="close-drawer" class="text-button" type="button">收起</button>
+    </div>
+    <div class="folder-list">
+      <button class="folder-filter active" type="button" data-folder="">全部会议</button>
+      {% for folder in folders %}
+        <div class="folder-row" data-folder-row="{{ folder }}">
+          <button class="folder-filter" type="button" data-folder="{{ folder }}">{{ folder }}</button>
+          <div class="folder-actions">
+            <button class="folder-mini rename-folder" type="button" data-folder="{{ folder }}">改名</button>
+            {% if folder != "默认文件夹" %}
+              <button class="folder-mini danger-mini delete-folder" type="button" data-folder="{{ folder }}">删除</button>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <form class="folder-form" action="/folders" method="post">
+      <input name="name" placeholder="新文件夹名称" required>
+      <button class="button primary" type="submit">新建文件夹</button>
+    </form>
+  </div>
+</section>
+
+<script>
+  const drawer = document.querySelector("#folder-dropdown");
+  const closeDrawer = document.querySelector("#close-drawer");
+  const folderMenuButton = document.querySelector("#folder-menu-button");
+  const listTitle = document.querySelector("#list-title");
+  const rows = [...document.querySelectorAll(".select-row")];
+  const emptyState = document.querySelector("#empty-state");
+  const meetingCount = document.querySelector("#meeting-count");
+  const folderCount = document.querySelector("#folder-count");
+  const filterFavorites = document.querySelector("#filter-favorites");
+  const showAll = document.querySelector("#show-all");
+  const selectModeButton = document.querySelector("#select-mode");
+  const selectAllButton = document.querySelector("#select-all");
+  const bulkDeleteButton = document.querySelector("#bulk-delete");
+  const bulkDeleteForm = document.querySelector("#bulk-delete-form");
+  const csrfLessPost = async (url, data) => {
+    const body = new URLSearchParams(data);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body
+    });
+    if (!response.ok) throw new Error("request failed");
+  };
+  let activeFolder = "";
+  let favoritesOnly = false;
+  let selectMode = false;
+
+  function setDrawer(open) {
+    drawer.hidden = !open;
+    drawer.classList.toggle("open", open);
+    drawer.setAttribute("aria-hidden", open ? "false" : "true");
+    folderMenuButton.classList.toggle("active", open);
+  }
+
+  function refreshFilters() {
+    let visibleCount = 0;
+    rows.forEach((row) => {
+      const matchFolder = !activeFolder || row.dataset.folder === activeFolder;
+      const matchFavorite = !favoritesOnly || row.dataset.favorite === "true";
+      row.hidden = !(matchFolder && matchFavorite);
+      if (!row.hidden) visibleCount += 1;
+      if (row.hidden) {
+        row.querySelector("input[name='meeting_ids']").checked = false;
+      }
+    });
+    if (emptyState) emptyState.hidden = visibleCount !== 0;
+    if (meetingCount) meetingCount.textContent = visibleCount;
+    listTitle.textContent = favoritesOnly ? "收藏会议" : activeFolder || "全部会议";
+    filterFavorites.classList.toggle("active", favoritesOnly);
+    showAll.classList.toggle("active", !favoritesOnly && !activeFolder);
+    refreshSelectAllButton();
+  }
+
+  function visibleChecks() {
+    return rows
+      .filter((row) => !row.hidden)
+      .map((row) => row.querySelector("input[name='meeting_ids']"));
+  }
+
+  function refreshSelectAllButton() {
+    const checks = visibleChecks();
+    const allSelected = checks.length > 0 && checks.every((item) => item.checked);
+    selectAllButton.textContent = allSelected ? "取消全选" : "全选";
+  }
+
+  closeDrawer.addEventListener("click", () => setDrawer(false));
+  folderMenuButton.addEventListener("click", () => setDrawer(drawer.hidden));
+
+  document.querySelectorAll(".folder-filter").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".folder-filter").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      activeFolder = button.dataset.folder;
+      favoritesOnly = false;
+      refreshFilters();
+      setDrawer(false);
+    });
+  });
+
+  document.querySelectorAll(".rename-folder").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const oldName = button.dataset.folder;
+      const newName = prompt("输入新的文件夹名称", oldName);
+      if (!newName || newName.trim() === oldName) return;
+      const cleanName = newName.trim();
+      try {
+        await csrfLessPost("/folders/rename", {old_name: oldName, new_name: cleanName});
+        const row = button.closest(".folder-row");
+        const filterButton = row?.querySelector(".folder-filter");
+        if (row) row.dataset.folderRow = cleanName;
+        if (filterButton) {
+          filterButton.dataset.folder = cleanName;
+          filterButton.textContent = cleanName;
+        }
+        row?.querySelectorAll("[data-folder]").forEach((item) => item.dataset.folder = cleanName);
+        rows.forEach((meetingRow) => {
+          if (meetingRow.dataset.folder !== oldName) return;
+          meetingRow.dataset.folder = cleanName;
+          const date = meetingRow.querySelector(".meeting-date");
+          if (date) date.textContent = date.textContent.replace(`· ${oldName}`, `· ${cleanName}`);
+        });
+        if (activeFolder === oldName) activeFolder = cleanName;
+        refreshFilters();
+      } catch {
+        alert("文件夹改名失败，请稍后再试。");
+      }
+    });
+  });
+
+  document.querySelectorAll(".delete-folder").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const name = button.dataset.folder;
+      if (!confirm(`确定删除「${name}」文件夹吗？里面的会议会移动到默认文件夹。`)) return;
+      try {
+        await csrfLessPost("/folders/delete", {name});
+        button.closest(".folder-row")?.remove();
+        if (folderCount) folderCount.textContent = Math.max(0, Number(folderCount.textContent) - 1);
+        rows.forEach((row) => {
+          if (row.dataset.folder !== name) return;
+          row.dataset.folder = "默认文件夹";
+          const date = row.querySelector(".meeting-date");
+          if (date) {
+            date.textContent = date.textContent.replace(`· ${name}`, "· 默认文件夹");
+          }
+        });
+        if (activeFolder === name) {
+          activeFolder = "";
+          document.querySelectorAll(".folder-filter").forEach((item) => {
+            item.classList.toggle("active", item.dataset.folder === "");
+          });
+        }
+        refreshFilters();
+      } catch {
+        alert("文件夹删除失败，请稍后再试。");
+      }
+    });
+  });
+
+  filterFavorites.addEventListener("click", () => {
+    favoritesOnly = true;
+    activeFolder = "";
+    document.querySelectorAll(".folder-filter").forEach((item) => item.classList.toggle("active", item.dataset.folder === ""));
+    refreshFilters();
+  });
+
+  showAll.addEventListener("click", () => {
+    activeFolder = "";
+    favoritesOnly = false;
+    document.querySelectorAll(".folder-filter").forEach((item) => item.classList.toggle("active", item.dataset.folder === ""));
+    refreshFilters();
+  });
+
+  selectModeButton.addEventListener("click", () => {
+    selectMode = !selectMode;
+    document.body.classList.toggle("selecting", selectMode);
+    selectModeButton.textContent = selectMode ? "取消" : "删除";
+    selectAllButton.hidden = !selectMode;
+    bulkDeleteButton.hidden = !selectMode;
+    if (!selectMode) {
+      document.querySelectorAll("input[name='meeting_ids']").forEach((item) => item.checked = false);
+    }
+    refreshSelectAllButton();
+  });
+
+  selectAllButton.addEventListener("click", () => {
+    const checks = visibleChecks();
+    const allSelected = checks.length > 0 && checks.every((item) => item.checked);
+    checks.forEach((item) => item.checked = !allSelected);
+    refreshSelectAllButton();
+  });
+
+  bulkDeleteButton.addEventListener("click", () => {
+    const checked = [...document.querySelectorAll("input[name='meeting_ids']:checked")];
+    if (!checked.length) {
+      alert("请先选择要删除的会议。");
+      return;
+    }
+    if (confirm(`确定删除选中的 ${checked.length} 条会议记录吗？`)) {
+      bulkDeleteForm.submit();
+    }
+  });
+
+  rows.forEach((row) => {
+    row.querySelector(".meeting-card").addEventListener("click", (event) => {
+      if (!selectMode) return;
+      event.preventDefault();
+      const checkbox = row.querySelector("input[type='checkbox']");
+      checkbox.checked = !checkbox.checked;
+      refreshSelectAllButton();
+    });
+  });
+
+  document.querySelectorAll("input[name='meeting_ids']").forEach((checkbox) => {
+    checkbox.addEventListener("change", refreshSelectAllButton);
+  });
+</script>
+{% endblock %}
