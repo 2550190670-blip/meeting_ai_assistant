@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-title calm-title">
+  <a class="circle-button" href="/meetings/{{ meeting.id }}" title="返回">‹</a>
+  <div>
+    <p class="eyebrow">Edit Meeting</p>
+    <h1>编辑会议</h1>
+    <p>修改原始记录后会重新生成纪要。</p>
+  </div>
+</header>
+
+<form id="meeting-form" class="form-card calm-form" action="/meetings/{{ meeting.id }}/edit" method="post">
+  <label>
+    <span>会议标题</span>
+    <input name="title" value="{{ meeting.title }}" required>
+  </label>
+  <label>
+    <span>文件夹</span>
+    <input name="folder" list="folder-list" value="{{ meeting.folder or '默认文件夹' }}">
+    <datalist id="folder-list">
+      {% for folder in folders %}
+        <option value="{{ folder }}"></option>
+      {% endfor %}
+    </datalist>
+  </label>
+  <label>
+    <span>原始记录</span>
+    <textarea name="raw_text" rows="16" required>{{ meeting.raw_text }}</textarea>
+  </label>
+  <button id="submit-button" class="button primary submit-button" type="submit">保存并重新生成</button>
+</form>
+
+<div id="loading-overlay" class="loading-overlay" hidden>
+  <div class="loading-card">
+    <span class="loading-spinner"></span>
+    <strong>正在重新生成会议纪要</strong>
+    <p>正在调用模型分析修改后的原始记录，请稍等。</p>
+  </div>
+</div>
+
+<script>
+  const meetingForm = document.querySelector("#meeting-form");
+  const submitButton = document.querySelector("#submit-button");
+  const loadingOverlay = document.querySelector("#loading-overlay");
+  meetingForm.addEventListener("submit", () => {
+    loadingOverlay.hidden = false;
+    submitButton.disabled = true;
+    submitButton.textContent = "重新生成中...";
+  });
+</script>
+{% endblock %}

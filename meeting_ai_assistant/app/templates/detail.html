@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="detail-hero calm-title">
+  <a class="circle-button" href="/" title="返回">‹</a>
+  <p class="eyebrow">{{ meeting.created_at }} · {{ meeting.folder }}</p>
+  <h1>{{ meeting.title }}</h1>
+  <p>{{ meeting.analysis.summary }}</p>
+  <button id="favorite-star" class="star-button {{ 'active' if meeting.favorite else '' }}" type="button" aria-label="收藏">★</button>
+</header>
+
+<section class="detail-actions">
+  <button id="toggle-analysis-edit" class="button secondary" type="button">编辑纪要</button>
+  <button id="toggle-folder-edit" class="button secondary" type="button">修改文件夹</button>
+  <a class="button secondary" href="/meetings/{{ meeting.id }}/edit">修改原始记录并重新生成</a>
+</section>
+
+<form id="folder-form" class="analysis-edit compact-edit" action="/meetings/{{ meeting.id }}/folder" method="post" hidden>
+  <label>
+    <span>选择已有文件夹</span>
+    <select id="folder-select" name="folder">
+      {% for folder in folders %}
+        <option value="{{ folder }}" {% if folder == meeting.folder %}selected{% endif %}>{{ folder }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="new-folder-field">
+    <span>或新建文件夹</span>
+    <input id="new-folder-input" placeholder="输入新文件夹名称">
+  </label>
+  <button class="button primary" type="submit">保存文件夹</button>
+</form>
+
+<form id="analysis-form" class="analysis-edit" action="/meetings/{{ meeting.id }}/analysis" method="post" hidden>
+  <label>
+    <span>会议名称</span>
+    <input name="title" value="{{ meeting.title }}" placeholder="输入会议名称">
+  </label>
+
+  <label>
+    <span>摘要</span>
+    <textarea name="summary" rows="4">{{ meeting.analysis.summary }}</textarea>
+  </label>
+
+  <section class="editable-list" data-list="topics">
+    <span class="field-title">关键议题</span>
+    <div class="editable-list-items">
+      {% for item in meeting.analysis.topics %}
+        <div class="editable-item-row">
+          <input name="topics" value="{{ item }}">
+          <button class="remove-item" type="button" aria-label="删除条目">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="button secondary add-item" type="button" data-name="topics" data-placeholder="新增关键议题">添加新条目</button>
+  </section>
+
+  <section class="editable-list">
+    <span class="field-title">待办事项</span>
+    <div id="editable-actions" class="editable-actions">
+      {% for item in meeting.analysis.action_items %}
+        <div class="editable-action-row">
+          <input name="action_owner" value="{{ item.owner }}" placeholder="负责人">
+          <input name="action_task" value="{{ item.task }}" placeholder="待办事项">
+          <input name="action_due_date" value="{{ item.due_date }}" placeholder="截止时间">
+          <button class="remove-item" type="button" aria-label="删除待办">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button id="add-action" class="button secondary" type="button">添加待办</button>
+  </section>
+
+  <section class="editable-list">
+    <span class="field-title">决策结论</span>
+    <div class="editable-list-items">
+      {% for item in meeting.analysis.decisions %}
+        <div class="editable-item-row">
+          <input name="decisions" value="{{ item }}">
+          <button class="remove-item" type="button" aria-label="删除条目">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="button secondary add-item" type="button" data-name="decisions" data-placeholder="新增决策结论">添加新条目</button>
+  </section>
+
+  <section class="editable-list">
+    <span class="field-title">风险点</span>
+    <div class="editable-list-items">
+      {% for item in meeting.analysis.risks %}
+        <div class="editable-item-row">
+          <input name="risks" value="{{ item }}">
+          <button class="remove-item" type="button" aria-label="删除条目">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="button secondary add-item" type="button" data-name="risks" data-placeholder="新增风险点">添加新条目</button>
+  </section>
+
+  <section class="editable-list">
+    <span class="field-title">后续跟进</span>
+    <div class="editable-list-items">
+      {% for item in meeting.analysis.follow_up %}
+        <div class="editable-item-row">
+          <input name="follow_up" value="{{ item }}">
+          <button class="remove-item" type="button" aria-label="删除条目">×</button>
+        </div>
+      {% endfor %}
+    </div>
+    <button class="button secondary add-item" type="button" data-name="follow_up" data-placeholder="新增后续跟进">添加新条目</button>
+  </section>
+
+  <button class="button primary submit-button" type="submit">保存纪要修改</button>
+</form>
+
+<section class="detail-section">
+  <div class="section-head">
+    <h2>关键议题</h2>
+  </div>
+  <div class="chips calm-chips">
+    {% for topic in meeting.analysis.topics %}
+      <span>{{ topic }}</span>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="content-card action-card">
+  <h2>待办事项</h2>
+  <div class="task-list">
+    {% for item in meeting.analysis.action_items %}
+      <article class="task">
+        <strong>{{ item.task }}</strong>
+        <small>负责人：{{ item.owner }} · 截止：{{ item.due_date }}</small>
+      </article>
+    {% else %}
+      <p class="muted">暂未识别到明确待办。</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="two-up">
+  <article class="content-card">
+    <h2>决策结论</h2>
+    <ul>
+      {% for item in meeting.analysis.decisions %}
+        <li>{{ item }}</li>
+      {% else %}
+        <li class="muted">暂未识别到明确决策。</li>
+      {% endfor %}
+    </ul>
+  </article>
+  <article class="content-card">
+    <h2>风险点</h2>
+    <ul>
+      {% for item in meeting.analysis.risks %}
+        <li>{{ item }}</li>
+      {% else %}
+        <li class="muted">暂未识别到明显风险。</li>
+      {% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="content-card">
+  <h2>后续跟进</h2>
+  <ul>
+    {% for item in meeting.analysis.follow_up %}
+      <li>{{ item }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="content-card transcript">
+  <h2>原始记录</h2>
+  <p>{{ meeting.raw_text }}</p>
+</section>
+
+<script>
+  const star = document.querySelector("#favorite-star");
+  const editButton = document.querySelector("#toggle-analysis-edit");
+  const folderButton = document.querySelector("#toggle-folder-edit");
+  const editForm = document.querySelector("#analysis-form");
+  const folderForm = document.querySelector("#folder-form");
+  const folderSelect = document.querySelector("#folder-select");
+  const newFolderInput = document.querySelector("#new-folder-input");
+  const actions = document.querySelector("#editable-actions");
+
+  star.addEventListener("click", async () => {
+    const body = new FormData();
+    body.append("ajax", "true");
+    const response = await fetch("/meetings/{{ meeting.id }}/favorite", { method: "POST", body });
+    const result = await response.json();
+    star.classList.toggle("active", result.favorite);
+  });
+
+  editButton.addEventListener("click", () => {
+    editForm.hidden = !editForm.hidden;
+    editButton.textContent = editForm.hidden ? "编辑纪要" : "收起编辑";
+  });
+
+  folderButton.addEventListener("click", () => {
+    folderForm.hidden = !folderForm.hidden;
+    folderButton.textContent = folderForm.hidden ? "修改文件夹" : "收起文件夹";
+  });
+
+  folderForm.addEventListener("submit", () => {
+    const newName = newFolderInput.value.trim();
+    if (newName) {
+      const option = new Option(newName, newName, true, true);
+      folderSelect.add(option);
+      folderSelect.value = newName;
+    }
+  });
+
+  document.querySelectorAll(".add-item").forEach((button) => {
+    button.addEventListener("click", () => {
+      const row = document.createElement("div");
+      const input = document.createElement("input");
+      const remove = document.createElement("button");
+      row.className = "editable-item-row";
+      input.name = button.dataset.name;
+      input.placeholder = button.dataset.placeholder;
+      remove.className = "remove-item";
+      remove.type = "button";
+      remove.setAttribute("aria-label", "删除条目");
+      remove.textContent = "×";
+      row.append(input, remove);
+      button.previousElementSibling.appendChild(row);
+      input.focus();
+    });
+  });
+
+  editForm.addEventListener("click", (event) => {
+    const remove = event.target.closest(".remove-item");
+    if (!remove) return;
+    const row = remove.closest(".editable-item-row, .editable-action-row");
+    if (row) row.remove();
+  });
+
+  document.querySelector("#add-action").addEventListener("click", () => {
+    const row = document.createElement("div");
+    row.className = "editable-action-row";
+    row.innerHTML = `
+      <input name="action_owner" placeholder="负责人">
+      <input name="action_task" placeholder="待办事项">
+      <input name="action_due_date" placeholder="截止时间">
+      <button class="remove-item" type="button" aria-label="删除待办">×</button>
+    `;
+    actions.appendChild(row);
+    row.querySelector("input").focus();
+  });
+</script>
+{% endblock %}
